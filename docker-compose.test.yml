@@ -1,0 +1,33 @@
+services:
+  elasticmq:
+    image: softwaremill/elasticmq:1.6.14
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./test/elasticmq.conf:/opt/elasticmq.conf
+    command: ["-Dconfig.file=/opt/elasticmq.conf"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9324/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ec2-metadata-mock:
+    image: public.ecr.aws/aws-ec2/amazon-ec2-metadata-mock:v1.13.0
+    platform: linux/arm64
+    ports:
+      - "1338:1338"
+    environment:
+      - IMDSV2=true
+    command: ["--port", "1338"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1338/latest/meta-data/instance-id"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  default:
+    name: tcons-signal-test

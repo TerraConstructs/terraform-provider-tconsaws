@@ -1,64 +1,190 @@
-# Terraform Provider Scaffolding (Terraform Plugin Framework)
+# terraform-provider-tconsaws
 
-_This template repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
+A Terraform provider that brings CloudFormation cfn-signal equivalent functionality to Terraform using AWS SQS.
 
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers, containing:
+This provider enables you to wait for EC2 instances or other compute resources to send success/failure signals during Terraform deployments, ensuring that downstream resources aren't created until instances have fully initialized.
 
-- A resource and a data source (`internal/provider/`),
-- Examples (`examples/`) and generated documentation (`docs/`),
-- Miscellaneous meta files.
+## Features
 
-These files contain boilerplate code that you will need to edit to create your own Terraform provider. Tutorials for creating Terraform providers can be found on the [HashiCorp Developer](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework) platform. _Terraform Plugin Framework specific guides are titled accordingly._
-
-Please see the [GitHub template repository documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) for how to create a new repository from this template on GitHub.
-
-Once you've written your provider, you'll want to [publish it on the Terraform Registry](https://developer.hashicorp.com/terraform/registry/providers/publishing) so that others can use it.
+- **Signal-based coordination**: Wait for compute resources to signal readiness via SQS
+- **AWS-compatible configuration**: Uses the same credential chain as the AWS provider
+- **Configurable timeouts**: Support for custom timeout configurations  
+- **Instance deduplication**: Handles multiple signals from the same instance correctly
+- **Failure handling**: Immediate failure on any failure signal received
 
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.23
+- [Go](https://golang.org/doc/install) >= 1.23 (for development)
+- AWS credentials configured (same as AWS provider)
 
-## Building The Provider
+## Quick Start
 
-1. Clone the repository
-1. Enter the repository directory
-1. Build the provider using the Go `install` command:
+```hcl
+terraform {
+  required_providers {
+    tconsaws = {
+      source  = "registry.terraform.io/terraconstructs/tconsaws"
+      version = "~> 1.0"
+    }
+  }
+}
 
-```shell
-go install
+provider "tconsaws" {
+  region = "us-east-1"
+}
+
+resource "aws_sqs_queue" "signals" {
+  name = "deployment-signals"
+}
+
+resource "aws_instance" "web" {
+  count = 3
+  # ... instance configuration ...
+  
+  user_data = <<-EOD
+    #!/bin/bash
+    # Install and configure your application
+    
+    # Signal success when ready
+    /usr/local/bin/tcsignal-aws \
+      --queue-url "${aws_sqs_queue.signals.url}" \
+      --id "deployment-${random_id.signal.hex}" \
+      --status SUCCESS
+  EOD
+}
+
+resource "tconsaws_signal" "web_ready" {
+  queue_url      = aws_sqs_queue.signals.url
+  signal_id      = "deployment-${random_id.signal.hex}"
+  expected_count = length(aws_instance.web)
+  
+  timeouts {
+    create = "10m"
+  }
+  
+  depends_on = [aws_instance.web]
+}
+
+# Resources that depend on instances being ready
+resource "aws_eip_association" "web" {
+  count         = length(aws_instance.web)
+  instance_id   = aws_instance.web[count.index].id
+  allocation_id = aws_eip.web[count.index].id
+  
+  depends_on = [tconsaws_signal.web_ready]
+}
 ```
 
-## Adding Dependencies
+## Resource: `tconsaws_signal`
 
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
+Waits for a specified number of success signals from compute resources.
 
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
+### Arguments
 
-```shell
-go get github.com/author/dependency
-go mod tidy
+- `queue_url` (Required) - SQS queue URL where signals will be sent
+- `signal_id` (Required) - Unique identifier for this deployment
+- `expected_count` (Required) - Number of success signals required
+- `retries` (Optional) - Number of retries for transient SQS errors (default: 3)
+- `publish_timeout` (Optional) - Timeout for each SQS operation (default: "10s")
+- `triggers` (Optional) - Map of values that trigger resource recreation
+- `timeouts` (Optional) - Resource timeout configuration
+
+### Attributes
+
+- `success_count` - Number of success signals received
+- `failure_received` - Whether any failure signal was received
+- `instance_ids` - List of unique instance IDs that sent signals
+
+## Sending Signals
+
+Use the [tcsignal-aws](https://github.com/TerraConstructs/signal-aws) binary on your compute resources:
+
+```bash
+# Send success signal
+tcsignal-aws \
+  --queue-url "https://sqs.us-east-1.amazonaws.com/123456789/signals" \
+  --id "deployment-abc123" \
+  --status SUCCESS
+
+# Send failure signal  
+tcsignal-aws \
+  --queue-url "https://sqs.us-east-1.amazonaws.com/123456789/signals" \
+  --id "deployment-abc123" \
+  --status FAILURE
+
+# Execute command and signal based on exit code
+tcsignal-aws \
+  --queue-url "https://sqs.us-east-1.amazonaws.com/123456789/signals" \
+  --id "deployment-abc123" \
+  --exec "./install-app.sh"
 ```
 
-Then commit the changes to `go.mod` and `go.sum`.
+## Provider Configuration
 
-## Using the provider
+The provider uses the same configuration options as the AWS provider:
 
-Fill this in for each provider
+```hcl
+provider "tconsaws" {
+  region                   = "us-east-1"
+  access_key              = "your-access-key"
+  secret_key              = "your-secret-key" 
+  profile                 = "your-aws-profile"
+  shared_credentials_files = ["~/.aws/credentials"]
+  
+  # Override endpoints for testing
+  # endpoints {
+  #   sqs = "http://localhost:9324" 
+  # }
+}
+```
 
-## Developing the Provider
+## Development
 
-If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
-
-To compile the provider, run `go install`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
-
-To generate or update documentation, run `make generate`.
-
-In order to run the full suite of Acceptance tests, run `make testacc`.
-
-*Note:* Acceptance tests create real resources, and often cost money to run.
+### Building the Provider
 
 ```shell
-make testacc
+go install .
 ```
+
+### Local Development
+
+1. Create `.terraformrc` in your home directory:
+```hcl
+provider_installation {
+  dev_overrides {
+    "registry.terraform.io/terraconstructs/tconsaws" = "/path/to/your/GOBIN"
+  }
+  direct {}
+}
+```
+
+2. Build and install:
+```shell
+go install .
+```
+
+### Testing
+
+Start the test environment:
+```shell
+./test/integration-test.sh
+```
+
+Run acceptance tests:
+```shell
+export TF_ACC=1
+go test -v ./internal/provider/ -run TestAcc
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MPL-2.0 License - see the LICENSE file for details.

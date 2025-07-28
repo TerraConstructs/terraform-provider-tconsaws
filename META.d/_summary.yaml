@@ -4,7 +4,24 @@ schema: 1.1
 partition: tf-ecosystem
 
 summary:
-  owner: team-tf-core-plugins
+  owner: terraconstructs
   description: |
-    Quick start repository for creating a Terraform provider using terraform-plugin-framework
+    Terraform provider that enables CloudFormation cfn-signal equivalent functionality using AWS SQS.
+    Provides signal-based coordination where EC2 instances and other compute resources can send 
+    success/failure signals via SQS, allowing Terraform to wait for resources to be fully 
+    initialized before proceeding with dependent resources.
   visibility: public
+
+provider:
+  name: tconsaws
+  registry_path: registry.terraform.io/terraconstructs/tconsaws
+  
+resources:
+  - name: tconsaws_signal
+    description: Waits for EC2 instances or other compute resources to send success/failure signals via SQS
+
+data_sources: []
+
+functions: []
+
+ephemeral_resources: []
