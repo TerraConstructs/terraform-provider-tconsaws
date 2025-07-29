@@ -1,0 +1,18 @@
+services:
+  elasticmq:
+    image: softwaremill/elasticmq:1.6.14
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./test/elasticmq.conf:/opt/elasticmq.conf
+    command: ["-Dconfig.file=/opt/elasticmq.conf"]
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:9324/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  default:
+    name: tcons-signal-test

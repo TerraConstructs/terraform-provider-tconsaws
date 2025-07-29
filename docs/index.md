@@ -12,12 +12,15 @@ The terraform-provider-tconsaws provider enables CloudFormation cfn-signal equiv
 ## Example Usage
 
 ```terraform
+# Copyright (c) TerraConstructs.
+# SPDX-License-Identifier: MPL-2.0
+
 provider "tconsaws" {
   region = "us-east-1"
-  
+
   # Optional: specify profile for credentials
   # profile = "default"
-  
+
   # Optional: specify custom endpoint for testing
   # endpoints {
   #   sqs = "http://localhost:9324"
@@ -31,6 +34,9 @@ provider "tconsaws" {
 ### Optional
 
 - `access_key` (String, Sensitive) AWS access key ID
+- `assume_role` (Block List) (see [below for nested schema](#nestedblock--assume_role))
+- `assume_role_with_web_identity` (Block List) (see [below for nested schema](#nestedblock--assume_role_with_web_identity))
+- `endpoints` (Block Set) (see [below for nested schema](#nestedblock--endpoints))
 - `max_retries` (Number) Maximum number of retries for AWS API calls
 - `profile` (String) AWS shared configuration profile name
 - `region` (String) Default AWS region for resources
@@ -40,3 +46,40 @@ provider "tconsaws" {
 - `shared_credentials_files` (List of String) List of paths to AWS shared credentials files
 - `skip_metadata_api_check` (Boolean) Skip EC2 instance metadata service reachability check
 - `token` (String, Sensitive) AWS session token
+
+<a id="nestedblock--assume_role"></a>
+### Nested Schema for `assume_role`
+
+Optional:
+
+- `duration` (String) The duration, between 15 minutes and 12 hours, of the role session. Valid time units are ns, us (or µs), ms, s, h, or m.
+- `external_id` (String) A unique identifier that might be required when you assume a role in another account.
+- `policy` (String) IAM Policy JSON describing further restricting permissions for the IAM Role being assumed.
+- `policy_arns` (Set of String) Amazon Resource Names (ARNs) of IAM Policies describing further restricting permissions for the IAM Role being assumed.
+- `role_arn` (String) Amazon Resource Name (ARN) of an IAM Role to assume prior to making API calls.
+- `session_name` (String) An identifier for the assumed role session.
+- `source_identity` (String) Source identity specified by the principal assuming the role.
+- `tags` (Map of String) Assume role session tags.
+- `transitive_tag_keys` (Set of String) Assume role session tag keys to pass to any subsequent sessions.
+
+
+<a id="nestedblock--assume_role_with_web_identity"></a>
+### Nested Schema for `assume_role_with_web_identity`
+
+Optional:
+
+- `duration` (String) The duration, between 15 minutes and 12 hours, of the role session. Valid time units are ns, us (or µs), ms, s, h, or m.
+- `policy` (String) IAM Policy JSON describing further restricting permissions for the IAM Role being assumed.
+- `policy_arns` (Set of String) Amazon Resource Names (ARNs) of IAM Policies describing further restricting permissions for the IAM Role being assumed.
+- `role_arn` (String) Amazon Resource Name (ARN) of an IAM Role to assume prior to making API calls.
+- `session_name` (String) An identifier for the assumed role session.
+- `web_identity_token` (String) Value of a web identity token from an OpenID Connect (OIDC) or OAuth provider. One of `web_identity_token` or `web_identity_token_file` is required.
+- `web_identity_token_file` (String) File containing a web identity token from an OpenID Connect (OIDC) or OAuth provider. One of `web_identity_token` or `web_identity_token_file` is required.
+
+
+<a id="nestedblock--endpoints"></a>
+### Nested Schema for `endpoints`
+
+Optional:
+
+- `sqs` (String) Use this to override the default service endpoint URL

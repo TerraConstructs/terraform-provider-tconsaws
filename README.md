@@ -20,81 +20,7 @@ This provider enables you to wait for EC2 instances or other compute resources t
 
 ## Quick Start
 
-```hcl
-terraform {
-  required_providers {
-    tconsaws = {
-      source  = "registry.terraform.io/terraconstructs/tconsaws"
-      version = "~> 1.0"
-    }
-  }
-}
-
-provider "tconsaws" {
-  region = "us-east-1"
-}
-
-resource "aws_sqs_queue" "signals" {
-  name = "deployment-signals"
-}
-
-resource "aws_instance" "web" {
-  count = 3
-  # ... instance configuration ...
-  
-  user_data = <<-EOD
-    #!/bin/bash
-    # Install and configure your application
-    
-    # Signal success when ready
-    /usr/local/bin/tcsignal-aws \
-      --queue-url "${aws_sqs_queue.signals.url}" \
-      --id "deployment-${random_id.signal.hex}" \
-      --status SUCCESS
-  EOD
-}
-
-resource "tconsaws_signal" "web_ready" {
-  queue_url      = aws_sqs_queue.signals.url
-  signal_id      = "deployment-${random_id.signal.hex}"
-  expected_count = length(aws_instance.web)
-  
-  timeouts {
-    create = "10m"
-  }
-  
-  depends_on = [aws_instance.web]
-}
-
-# Resources that depend on instances being ready
-resource "aws_eip_association" "web" {
-  count         = length(aws_instance.web)
-  instance_id   = aws_instance.web[count.index].id
-  allocation_id = aws_eip.web[count.index].id
-  
-  depends_on = [tconsaws_signal.web_ready]
-}
-```
-
-## Resource: `tconsaws_signal`
-
-Waits for a specified number of success signals from compute resources.
-
-### Arguments
-
-- `queue_url` (Required) - SQS queue URL where signals will be sent
-- `signal_id` (Required) - Unique identifier for this deployment
-- `expected_count` (Required) - Number of success signals required
-- `retries` (Optional) - Number of retries for transient SQS errors (default: 3)
-- `publish_timeout` (Optional) - Timeout for each SQS operation (default: "10s")
-- `triggers` (Optional) - Map of values that trigger resource recreation
-- `timeouts` (Optional) - Resource timeout configuration
-
-### Attributes
-
-- `success_count` - Number of success signals received
-- `failure_received` - Whether any failure signal was received
-- `instance_ids` - List of unique instance IDs that sent signals
+Refer to (Terraform Registry docs)[https://registry.terraform.io/providers/terraconstructs/tconsaws]
 
 ## Sending Signals
 
@@ -120,25 +46,6 @@ tcsignal-aws \
   --exec "./install-app.sh"
 ```
 
-## Provider Configuration
-
-The provider uses the same configuration options as the AWS provider:
-
-```hcl
-provider "tconsaws" {
-  region                   = "us-east-1"
-  access_key              = "your-access-key"
-  secret_key              = "your-secret-key" 
-  profile                 = "your-aws-profile"
-  shared_credentials_files = ["~/.aws/credentials"]
-  
-  # Override endpoints for testing
-  # endpoints {
-  #   sqs = "http://localhost:9324" 
-  # }
-}
-```
-
 ## Development
 
 ### Building the Provider
@@ -146,6 +53,16 @@ provider "tconsaws" {
 ```shell
 go install .
 ```
+
+### Installing Signal Binary
+
+For testing and development, you'll need the [tcsignal-aws](https://github.com/TerraConstructs/signal-aws) binary:
+
+```shell
+make install-signal-binary
+```
+
+This downloads the appropriate binary for your platform to `./bin/tcsignal-aws`.
 
 ### Local Development
 
@@ -161,21 +78,26 @@ provider_installation {
 
 2. Build and install:
 ```shell
-go install .
+make install
 ```
 
 ### Testing
 
-Start the test environment:
+Run unit tests:
 ```shell
-./test/integration-test.sh
+make test
 ```
 
-Run acceptance tests:
+Run acceptance tests (fully automated):
 ```shell
-export TF_ACC=1
-go test -v ./internal/provider/ -run TestAcc
+make testacc
 ```
+
+Available test commands:
+- `make testacc-setup` - Start test environment (ElasticMQ + EC2 metadata mock)
+- `make testacc-clean` - Clean test queues 
+- `make testacc-teardown` - Stop test environment
+- `make testacc` - Complete test cycle: setup → test → cleanup
 
 ## Contributing
 
