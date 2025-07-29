@@ -251,7 +251,7 @@ func (r *SignalResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// pollForSignals implements the core SQS polling logic
+// pollForSignals implements the core SQS polling logic.
 func (r *SignalResource) pollForSignals(ctx context.Context, data *SignalResourceModel) error {
 	queueURL := data.QueueURL.ValueString()
 	signalID := data.SignalID.ValueString()
@@ -267,7 +267,7 @@ func (r *SignalResource) pollForSignals(ctx context.Context, data *SignalResourc
 	successfulInstances := make(map[string]bool)
 	var instanceIDsList []string
 	var successCount int64 = 0
-	var failureReceived bool = false
+	var failureReceived bool
 
 	// Polling loop
 	for {
@@ -325,7 +325,6 @@ func (r *SignalResource) pollForSignals(ctx context.Context, data *SignalResourc
 				// Check if this was a failure signal
 				if status, exists := message.MessageAttributes["status"]; exists && status.StringValue != nil {
 					if strings.ToUpper(*status.StringValue) == "FAILURE" {
-						failureReceived = true
 						tflog.Error(ctx, "Received failure signal", map[string]interface{}{
 							"signal_id": signalID,
 						})
@@ -373,7 +372,7 @@ func (r *SignalResource) pollForSignals(ctx context.Context, data *SignalResourc
 	return nil
 }
 
-// processMessage processes a single SQS message and returns true if it was relevant to our signal
+// processMessage processes a single SQS message and returns true if it was relevant to our signal.
 func (r *SignalResource) processMessage(ctx context.Context, message types.Message, signalID string, successfulInstances map[string]bool) (bool, error) {
 	// Check if message has the required signal_id attribute
 	signalIDAttr, hasSignalID := message.MessageAttributes["signal_id"]
